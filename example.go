@@ -1,17 +1,16 @@
 // @author cold bin
 // @date 2022/7/23
 
-package main
+package mini_websocket
 
 import (
 	"log"
-	"mini-websocket/server"
 	"net/http"
 )
 
 func main() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		wsConn, err := server.DefaultUpGrader.UpGrade(r, w)
+		wsConn, err := DefaultUpGrader.UpGrade(r, w)
 		if err != nil {
 			log.Println(err)
 			return

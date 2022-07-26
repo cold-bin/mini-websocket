@@ -1,7 +1,7 @@
 // @author cold bin
 // @date 2022/7/23
 
-package tool
+package mini_websocket
 
 import (
 	"bytes"

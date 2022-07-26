@@ -1,7 +1,7 @@
 // @author cold bin
 // @date 2022/7/23
 
-package server
+package mini_websocket
 
 import (
 	"bufio"
@@ -11,8 +11,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"mini-websocket/dispatch"
-
 	"net"
 )
 
@@ -75,13 +73,13 @@ func (wc *WsConn) RemoteAddr() net.Addr {
 }
 
 // ReadMessage 读取text、binary、延续帧
-func (wc *WsConn) ReadMessage() (mt dispatch.MessageType, msg []byte, err error) {
+func (wc *WsConn) ReadMessage() (mt MessageType, msg []byte, err error) {
 	frame, err := readFrame(wc)
 	if err != nil {
 		log.Printf("Conn.ReadMessage failed to c.readFrame, err=%v\n", err)
-		return dispatch.NoFrame, nil, err
+		return NoFrame, nil, err
 	}
-	mt = dispatch.MessageType(frame.OpCode)
+	mt = MessageType(frame.OpCode)
 
 	frame.MaskPayload()
 	log.Println("frame decode mask payload: ", string(frame.Payload))
@@ -93,7 +91,7 @@ func (wc *WsConn) ReadMessage() (mt dispatch.MessageType, msg []byte, err error)
 	for !frame.IsFinal() {
 		if frame, err = readFrame(wc); err != nil {
 			log.Printf("Conn.ReadMessage failed to c.readFrame, err=%v", err)
-			return dispatch.NoFrame, nil, err
+			return NoFrame, nil, err
 		}
 
 		frame.MaskPayload()
@@ -123,7 +121,7 @@ func read(wc *WsConn, n int) ([]byte, error) {
 }
 
 // readFrame 从字节流里读出一个完整帧的数据，由于控制帧只能是一个帧，所以在读取帧的时候应当处理完控制帧
-func readFrame(wc *WsConn) (*dispatch.Frame, error) {
+func readFrame(wc *WsConn) (*Frame, error) {
 	//1000 0001 1000 1011
 	// 读2Byte的数据，取出字节流的帧头部
 	p, err := read(wc, 2)
@@ -133,7 +131,7 @@ func readFrame(wc *WsConn) (*dispatch.Frame, error) {
 	}
 	log.Println("Conn.readFrame got frameWithoutPayload bytes: ", p)
 	// 解析WebSocket帧头部
-	frameWithoutPayload := dispatch.ParseToFrameHeader(p)
+	frameWithoutPayload := ParseToFrameHeader(p)
 	log.Printf("Conn.readFrame got frameWithoutPayload=%+v", frameWithoutPayload)
 
 	remainBytesNum := uint64(frameWithoutPayload.PayloadLen) //payload的字节数，默认等于PayloadLen
@@ -172,7 +170,7 @@ func readFrame(wc *WsConn) (*dispatch.Frame, error) {
 	}
 
 	// frame校验，先校验非负载数据
-	if err = dispatch.CheckFrameWithoutPayload(frameWithoutPayload); err != nil {
+	if err = CheckFrameWithoutPayload(frameWithoutPayload); err != nil {
 		log.Printf("Conn.readFrame failed to c.read(header), err=%v", err)
 		if err := wc.CloseWrongProtocol(); err != nil {
 			return nil, err
@@ -209,14 +207,14 @@ func readFrame(wc *WsConn) (*dispatch.Frame, error) {
 	frameWithoutPayload.Payload = payload
 
 	// 只处理ping pong close 帧
-	switch dispatch.MessageType(frameWithoutPayload.OpCode) {
-	case dispatch.TextFrame, dispatch.BinaryFrame, dispatch.ContinuationFrame:
+	switch MessageType(frameWithoutPayload.OpCode) {
+	case TextFrame, BinaryFrame, ContinuationFrame:
 		//不处理可能有连续帧的类型
-	case dispatch.PingFrame:
+	case PingFrame:
 		err = wc.ReplyPing(frameWithoutPayload)
-	case dispatch.PongFrame:
+	case PongFrame:
 		err = wc.ReplyPong()
-	case dispatch.ConnectionCloseFrame:
+	case ConnectionCloseFrame:
 		//解析帧中收到关闭帧时，正常关闭
 		err = wc.CloseRight()
 	default:
@@ -228,16 +226,16 @@ func readFrame(wc *WsConn) (*dispatch.Frame, error) {
 }
 
 func (wc *WsConn) Ping() (err error) {
-	return sendControlFrame(wc, dispatch.PingFrame, []byte("ping"))
+	return sendControlFrame(wc, PingFrame, []byte("ping"))
 }
 
 // ReplyPing 响应ping帧数据，将ping帧的负载数据，装入pong帧中即可
-func (wc *WsConn) ReplyPing(frame *dispatch.Frame) (err error) {
+func (wc *WsConn) ReplyPing(frame *Frame) (err error) {
 	return wc.Pong(frame.Payload)
 }
 
 func (wc *WsConn) Pong(pingPayload []byte) (err error) {
-	return sendControlFrame(wc, dispatch.PongFrame, pingPayload)
+	return sendControlFrame(wc, PongFrame, pingPayload)
 }
 
 // ReplyPong 响应pong帧
@@ -256,7 +254,7 @@ func (wc *WsConn) SendMessage(text string) (err error) {
 	//}
 	//fmt.Println(len(zipBytes), zipBytes)
 	// todo
-	return sendDataFrame(wc, []byte(text), dispatch.TextFrame)
+	return sendDataFrame(wc, []byte(text), TextFrame)
 }
 
 // SendBinary 发送二进制数据
@@ -267,13 +265,13 @@ func (wc *WsConn) SendBinary(r io.Reader) (err error) {
 		return err
 	}
 
-	return sendDataFrame(wc, payload, dispatch.BinaryFrame)
+	return sendDataFrame(wc, payload, BinaryFrame)
 }
 
 // sendDataFrame 发送数据帧：opcode应限制为text和binary
-func sendDataFrame(wc *WsConn, data []byte, opcode dispatch.MessageType) (err error) {
+func sendDataFrame(wc *WsConn, data []byte, opcode MessageType) (err error) {
 	switch opcode {
-	case dispatch.TextFrame, dispatch.BinaryFrame:
+	case TextFrame, BinaryFrame:
 	default:
 		return fmt.Errorf("invalid opcode=%d for data frame", opcode)
 	}
@@ -307,21 +305,21 @@ func sendDataFrame(wc *WsConn, data []byte, opcode dispatch.MessageType) (err er
 }
 
 // fragmentDataFrames 将大片数据拆分成若干 shardSize 大小的数据
-func fragmentDataFrames(data []byte, noMask bool, opcode dispatch.MessageType) []*dispatch.Frame {
+func fragmentDataFrames(data []byte, noMask bool, opcode MessageType) []*Frame {
 	s := len(data)
 	start, end, n := 0, 0, s/shardSize
 
-	frames := make([]*dispatch.Frame, 0, n+1)
+	frames := make([]*Frame, 0, n+1)
 
 	//将大数据分成 s / shardSize 份，每份 shardSize
 	for i := 1; i <= n; i++ {
 		start, end = (i-1)*shardSize, i*shardSize
-		frames = append(frames, constructDataFrame(data[start:end], noMask, dispatch.ContinuationFrame))
+		frames = append(frames, constructDataFrame(data[start:end], noMask, ContinuationFrame))
 	}
 
 	//追加剩余数据
 	if end < s {
-		frames = append(frames, constructDataFrame(data[end:], noMask, dispatch.ContinuationFrame))
+		frames = append(frames, constructDataFrame(data[end:], noMask, ContinuationFrame))
 	}
 
 	//分片传输，第一个帧的opcode设置为0x1或0x2，其余位都是0
@@ -334,7 +332,7 @@ func fragmentDataFrames(data []byte, noMask bool, opcode dispatch.MessageType) [
 }
 
 // sendControlFrame 发送控制帧（ping、pong、close）
-func sendControlFrame(wc *WsConn, msgType dispatch.MessageType, payload []byte) (err error) {
+func sendControlFrame(wc *WsConn, msgType MessageType, payload []byte) (err error) {
 	frame := constructControlFrame(msgType, wc.IsServer, payload)
 	log.Printf("control frame...")
 	if err = sendFrame(wc, frame); err != nil {
@@ -346,9 +344,9 @@ func sendControlFrame(wc *WsConn, msgType dispatch.MessageType, payload []byte) 
 }
 
 // sendFrame 发送完好的帧到连接里
-func sendFrame(wc *WsConn, frame *dispatch.Frame) error {
+func sendFrame(wc *WsConn, frame *Frame) error {
 	//校验帧
-	if err := dispatch.CheckFrameWithoutPayload(frame); err != nil {
+	if err := CheckFrameWithoutPayload(frame); err != nil {
 		//协议问题关闭连接
 		if err := wc.CloseWrongProtocol(); err != nil {
 			return err
@@ -357,7 +355,7 @@ func sendFrame(wc *WsConn, frame *dispatch.Frame) error {
 	}
 
 	//序列化为帧协议字节流
-	frameBytes := dispatch.FrameToBytes(frame)
+	frameBytes := FrameToBytes(frame)
 
 	//将序列化的字节流数据写入连接的缓存区
 	if _, err := wc.BufWR.Write(frameBytes); err != nil {
@@ -373,8 +371,8 @@ func sendFrame(wc *WsConn, frame *dispatch.Frame) error {
 }
 
 // constructDataFrame 构造数据类型的帧（binary、text）
-func constructDataFrame(payload []byte, noMask bool, msgType dispatch.MessageType) *dispatch.Frame {
-	final := msgType != dispatch.ContinuationFrame
+func constructDataFrame(payload []byte, noMask bool, msgType MessageType) *Frame {
+	final := msgType != ContinuationFrame
 	frame := constructFrame(msgType, final, noMask)
 	frame.SetPayload(payload)
 
@@ -382,7 +380,7 @@ func constructDataFrame(payload []byte, noMask bool, msgType dispatch.MessageTyp
 }
 
 // constructControlFrame 构造控制帧（ping、pong、close）
-func constructControlFrame(msgType dispatch.MessageType, isServer bool, payload []byte) *dispatch.Frame {
+func constructControlFrame(msgType MessageType, isServer bool, payload []byte) *Frame {
 	//只有客户端想服务端发送帧时，才会对帧进行掩码处理
 	frame := constructFrame(msgType, true, isServer)
 
@@ -393,7 +391,7 @@ func constructControlFrame(msgType dispatch.MessageType, isServer bool, payload 
 	return frame
 }
 
-func constructFrame(msgType dispatch.MessageType, final bool, noMask bool) *dispatch.Frame {
+func constructFrame(msgType MessageType, final bool, noMask bool) *Frame {
 
 	fin := uint16(1)
 	mask := uint16(1)
@@ -406,7 +404,7 @@ func constructFrame(msgType dispatch.MessageType, final bool, noMask bool) *disp
 		mask = 0
 	}
 
-	frame := dispatch.Frame{
+	frame := Frame{
 		Fin:                fin,
 		RSV1:               0,
 		RSV2:               0,
@@ -429,42 +427,42 @@ func constructFrame(msgType dispatch.MessageType, final bool, noMask bool) *disp
 
 // CloseRight 正常关闭连接
 func (wc *WsConn) CloseRight() error {
-	return close(wc, dispatch.CloseRight)
+	return close(wc, CloseRight)
 }
 
 // CloseAsideLeaving 某端点离开连接
 func (wc *WsConn) CloseAsideLeaving() error {
-	return close(wc, dispatch.CloseAsideLeaving)
+	return close(wc, CloseAsideLeaving)
 }
 
 // CloseWrongProtocol 表示端点由于协议错误正在终止连接
 func (wc *WsConn) CloseWrongProtocol() error {
-	return close(wc, dispatch.CloseWrongProtocol)
+	return close(wc, CloseWrongProtocol)
 }
 
 // CloseNotAccept 关闭连接，因某端点接收到一种它不能接受的数据
 func (wc *WsConn) CloseNotAccept() error {
-	return close(wc, dispatch.CloseNotAccept)
+	return close(wc, CloseNotAccept)
 }
 
 // CloseAbnormal 异常关闭
 func (wc *WsConn) CloseAbnormal() error {
-	return close(wc, dispatch.CloseAbnormal)
+	return close(wc, CloseAbnormal)
 }
 
 // CloseDifferentMsgType 表示端点正在终止连接 ，因为它在消息中接收到与消息类型不一致的数据
 func (wc *WsConn) CloseDifferentMsgType() error {
-	return close(wc, dispatch.CloseDifferentMsgType)
+	return close(wc, CloseDifferentMsgType)
 }
 
 // CloseInternalError 端点内部错误，关闭连接
 func (wc *WsConn) CloseInternalError() error {
-	return close(wc, dispatch.CloseInternalError)
+	return close(wc, CloseInternalError)
 }
 
 // CloseTooBigData 表示端点正在终止连接 ，因为它收到了一条太大而无法处理的消息。
 func (wc *WsConn) CloseTooBigData() error {
-	return close(wc, dispatch.CloseTooBigData)
+	return close(wc, CloseTooBigData)
 }
 
 func close(wc *WsConn, closeCode int) (err error) {
@@ -472,11 +470,11 @@ func close(wc *WsConn, closeCode int) (err error) {
 	//前两个字节放入code
 	binary.BigEndian.PutUint16(p[:2], uint16(closeCode))
 	//后续放入原因
-	p = append(p, []byte(dispatch.Error(closeCode))...)
+	p = append(p, []byte(Error(closeCode))...)
 	log.Printf("c.close sending close frame, payload=%s", p)
 
 	//发送关闭帧
-	if err = sendControlFrame(wc, dispatch.ConnectionCloseFrame, p); err != nil {
+	if err = sendControlFrame(wc, ConnectionCloseFrame, p); err != nil {
 		log.Printf("c.handleClose failed to c.sendControlFrame, err=%v", err)
 		return
 	}

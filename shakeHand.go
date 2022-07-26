@@ -1,14 +1,13 @@
 // @author cold bin
 // @date 2022/7/23
 
-package server
+package mini_websocket
 
 import (
 	"compress/flate"
 	"errors"
 	"fmt"
 	"log"
-	"mini-websocket/tool"
 	"net/http"
 	"time"
 )
@@ -119,11 +118,11 @@ func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 	//开始握手
 	start := time.Now()
 	//校验http请求的头部字段，确定是否为握手请求
-	if !tool.IsWsHeader(r.Header, "Connection", "Upgrade") {
+	if !IsWsHeader(r.Header, "Connection", "Upgrade") {
 		return ug.Error(w, http.StatusBadRequest, "'Upgrade' 字段没包含在 'Connection' 字段内")
 	}
 
-	if !tool.IsWsHeader(r.Header, "Upgrade", "websocket") {
+	if !IsWsHeader(r.Header, "Upgrade", "websocket") {
 		return ug.Error(w, http.StatusBadRequest, "'websocket' 没有包含在 'Upgrade' 内")
 	}
 
@@ -131,7 +130,7 @@ func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 		return ug.Error(w, http.StatusMethodNotAllowed, "请求方法不是get方法")
 	}
 
-	if !tool.IsWsHeader(r.Header, "Sec-Websocket-Version", "13") {
+	if !IsWsHeader(r.Header, "Sec-Websocket-Version", "13") {
 		return ug.Error(w, http.StatusUpgradeRequired, "请求头不包含服务端支持websocket版本")
 	}
 
@@ -143,7 +142,7 @@ func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 	//随机字符串
 	SWK := r.Header.Get("Sec-WebSocket-Key")
 
-	if !tool.IsSWK(SWK) {
+	if !IsSWK(SWK) {
 		return ug.Error(w, http.StatusBadRequest, "请求头应包含Sec-WebSocket-Key字段的24位随机字符串,wrong: "+SWK)
 	}
 
@@ -162,7 +161,7 @@ func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 	_, _ = brw.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
 	_, _ = brw.WriteString("Connection:upgrade\r\n")
 	_, _ = brw.WriteString("Upgrade:websocket\r\n")
-	_, _ = brw.WriteString("Sec-WebSocket-Accept:" + tool.EncodeSWK(SWK) + "\r\n\r\n")
+	_, _ = brw.WriteString("Sec-WebSocket-Accept:" + EncodeSWK(SWK) + "\r\n\r\n")
 
 	if err = brw.Flush(); err != nil {
 		_ = netConn.Close()
