@@ -25,14 +25,6 @@ const (
 	maxWriteBufferSize = 65535 * 10 //网络连接缓冲区的写的最多字节数
 )
 
-//连接状态
-const (
-	Connecting = iota + 1
-	Connected
-	Closing
-	Closed
-)
-
 // WsConn websocket连接
 type WsConn struct {
 	Conn  net.Conn
