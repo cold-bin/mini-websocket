@@ -1,7 +1,7 @@
 # mini-websocket
 websocket框架
 ### mini-websocket's function 
-- [x] 依据协议，序列化和反序列化帧，超时处理
+- [x] 序列化和反序列化帧
 - [x] 握手与挥手
 - [x] 良好的封装
 - [x] 心跳api 
