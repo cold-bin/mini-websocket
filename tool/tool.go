@@ -4,8 +4,11 @@
 package tool
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/sha1"
 	"encoding/base64"
+	"io"
 	"net/http"
 )
 
@@ -33,4 +36,38 @@ func EncodeSWK(swk string) string {
 	o := sha1.New()
 	o.Write([]byte(swk + GUID))
 	return base64.StdEncoding.EncodeToString(o.Sum(nil))
+}
+
+// GZipBytes level指压缩等级，见 gzip包
+func GZipBytes(data []byte, level int) ([]byte, error) {
+	var input bytes.Buffer
+	g, err := gzip.NewWriterLevel(&input, level)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := g.Write(data); err != nil {
+		return nil, err
+	}
+
+	g.Close()
+
+	return input.Bytes(), nil
+}
+
+func UGZipBytes(data []byte) []byte {
+	var out bytes.Buffer
+	var in bytes.Buffer
+
+	in.Write(data)
+	r, err := gzip.NewReader(&in)
+	if err != nil {
+		return nil
+	}
+
+	r.Close()
+
+	io.Copy(&out, r)
+
+	return out.Bytes()
 }

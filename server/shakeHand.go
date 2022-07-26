@@ -4,6 +4,7 @@
 package server
 
 import (
+	"compress/flate"
 	"errors"
 	"fmt"
 	"log"
@@ -16,7 +17,16 @@ const (
 	minHandshakeTimeout = time.Second //握手最少超时时间
 )
 
-var DefaultUpGrader = UpGrader{
+//压缩等级
+const (
+	NoCompression      = flate.NoCompression
+	BestSpeed          = flate.BestSpeed
+	BestCompression    = flate.BestCompression
+	DefaultCompression = flate.DefaultCompression
+	HuffmanOnly        = flate.HuffmanOnly
+)
+
+var DefaultUpGrader = upGrader{
 	HandshakeTimeout: minHandshakeTimeout,
 	ReadBufferSize:   minReadBufferSize,
 	WriteBufferSize:  minWriteBufferSize,
@@ -24,11 +34,11 @@ var DefaultUpGrader = UpGrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
-	EnableCompress: false,
+	CompressLevel: 0,
 }
 
 // UpGrader 指定将http连接劫持升级为websocket连接
-type UpGrader struct {
+type upGrader struct {
 	//握手超时时间
 	HandshakeTimeout time.Duration
 	//指定底层网络连接的缓冲区大小
@@ -37,12 +47,12 @@ type UpGrader struct {
 	OnError func(w http.ResponseWriter, status int, reason string)
 	//跨域支持
 	CheckOrigin func(r *http.Request) bool
-	//是否压缩
-	EnableCompress bool
+	//压缩等级
+	CompressLevel int
 }
 
 // NewUpGrader 如果为提供 OnError 参数，将默认使用默认错误处理逻辑
-func NewUpGrader(handshakeTimeout time.Duration, RBufSize, WBufSize int, OnErr func(http.ResponseWriter, int, string), checkOrigin func(*http.Request) bool, enableCompress bool) UpGrader {
+func NewUpGrader(handshakeTimeout time.Duration, RBufSize, WBufSize int, OnErr func(http.ResponseWriter, int, string), checkOrigin func(*http.Request) bool, compressLevel int) upGrader {
 	if OnErr == nil {
 		OnErr = defaultOnErr
 	}
@@ -58,13 +68,17 @@ func NewUpGrader(handshakeTimeout time.Duration, RBufSize, WBufSize int, OnErr f
 	if WBufSize < minWriteBufferSize || WBufSize > maxWriteBufferSize {
 		WBufSize = minWriteBufferSize
 	}
-	return UpGrader{
+
+	if compressLevel < HuffmanOnly || compressLevel > BestCompression {
+		compressLevel = NoCompression //默认无压缩
+	}
+	return upGrader{
 		HandshakeTimeout: handshakeTimeout,
 		ReadBufferSize:   RBufSize,
 		WriteBufferSize:  WBufSize,
 		OnError:          OnErr,
 		CheckOrigin:      checkOrigin,
-		EnableCompress:   enableCompress,
+		CompressLevel:    compressLevel,
 	}
 }
 
@@ -95,13 +109,13 @@ func defaultCheckOrigin(r *http.Request) bool {
 }
 
 // Error 升级遇到错误时调用
-func (ug *UpGrader) Error(w http.ResponseWriter, status int, reason string) (*WsConn, error) {
+func (ug *upGrader) Error(w http.ResponseWriter, status int, reason string) (*WsConn, error) {
 	ug.OnError(w, status, reason)
 	err := errors.New(reason)
 	return nil, err
 }
 
-func (ug *UpGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsConn, err error) {
+func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsConn, err error) {
 	//开始握手
 	start := time.Now()
 	//校验http请求的头部字段，确定是否为握手请求
@@ -157,7 +171,7 @@ func (ug *UpGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 	}
 
 	//建立连接
-	wsConn := NewWsConn(netConn, true, ug.ReadBufferSize, ug.WriteBufferSize)
+	wsConn := NewWsConn(netConn, true, ug.ReadBufferSize, ug.WriteBufferSize, ug.CompressLevel)
 
 	wsConn.State = Connected
 

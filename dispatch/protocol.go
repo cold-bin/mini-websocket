@@ -18,17 +18,18 @@ const (
 	CloseNotAccept        = 1003 //关闭连接，因某端点接收到一种它不能接受的数据
 	CloseAbnormal         = 1006 //异常关闭
 	CloseDifferentMsgType = 1007 //表示端点正在终止连接 ，因为它在消息中接收到与消息类型不一致的数据
+	CloseInternalError    = 1008 //根据协议，扩展的错误码，用来指定端内部异常错误，导致关闭
 	CloseTooBigData       = 1009 //表示端点正在终止连接 ，因为它收到了一条太大而无法处理的消息。
 )
 
 var closeErrorMap = map[int]string{
-	CloseRight: "正常，关闭连接",
-
+	CloseRight:            "正常，关闭连接",
 	CloseAsideLeaving:     "服务器关闭或浏览器已离开页面，关闭连接",
 	CloseWrongProtocol:    "协议错误，关闭连接",
 	CloseNotAccept:        "浏览器或服务器接收到不能接受的数据，关闭连接",
 	CloseAbnormal:         "未发送关闭帧，关闭连接",
 	CloseDifferentMsgType: "消息类型不一致，关闭连接",
+	CloseInternalError:    "端点内部错误，关闭连接",
 	CloseTooBigData:       "消息太大，关闭连接",
 }
 

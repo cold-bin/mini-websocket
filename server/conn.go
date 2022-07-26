@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"mini-websocket/dispatch"
+
 	"net"
 )
 
@@ -40,12 +41,13 @@ type WsConn struct {
 	BufRD *bufio.Reader // 读，缓冲区的数据
 	BufWR *bufio.Writer // 写，缓冲区的数据
 
-	State    int  //当前连接的状态
-	IsServer bool //标记服务端，服务端向客户端发送帧数据时，不需要掩码处理
+	State         int  //当前连接的状态
+	IsServer      bool //标记服务端，服务端向客户端发送帧数据时，不需要掩码处理
+	CompressLevel int  //压缩等级
 }
 
 // NewWsConn 构造websocket.Conn
-func NewWsConn(netConn net.Conn, isServer bool, ReadBufferSize, WriteBufferSize int) *WsConn {
+func NewWsConn(netConn net.Conn, isServer bool, ReadBufferSize, WriteBufferSize int, compressLevel int) *WsConn {
 	if ReadBufferSize < minReadBufferSize || ReadBufferSize > maxReadBufferSize {
 		ReadBufferSize = minReadBufferSize
 	}
@@ -55,11 +57,12 @@ func NewWsConn(netConn net.Conn, isServer bool, ReadBufferSize, WriteBufferSize 
 	}
 
 	c := &WsConn{
-		Conn:     netConn,
-		IsServer: isServer,
-		BufRD:    bufio.NewReaderSize(netConn, ReadBufferSize),
-		BufWR:    bufio.NewWriterSize(netConn, WriteBufferSize),
-		State:    Connecting,
+		Conn:          netConn,
+		IsServer:      isServer,
+		BufRD:         bufio.NewReaderSize(netConn, ReadBufferSize),
+		BufWR:         bufio.NewWriterSize(netConn, WriteBufferSize),
+		State:         Connecting,
+		CompressLevel: compressLevel,
 	}
 
 	return c
@@ -97,7 +100,11 @@ func (wc *WsConn) ReadMessage() (mt dispatch.MessageType, msg []byte, err error)
 
 		frame.MaskPayload()
 		log.Println("frame decode mask payload: ", string(frame.Payload))
+		// todo
+		//zipBytes := tool.UGZipBytes(frame.Payload)
+		//log.Println(len(zipBytes), zipBytes)
 
+		//buf.Write(zipBytes)
 		buf.Write(frame.Payload)
 	}
 
@@ -242,6 +249,15 @@ func (wc *WsConn) ReplyPong() (err error) {
 
 // SendMessage 发送text数据
 func (wc *WsConn) SendMessage(text string) (err error) {
+	//zipBytes, err := tool.GZipBytes([]byte(text), wc.CompressLevel)
+	//if err != nil {
+	//	if err := wc.CloseInternalError(); err != nil {
+	//		return err
+	//	}
+	//	return err
+	//}
+	//fmt.Println(len(zipBytes), zipBytes)
+	// todo
 	return sendDataFrame(wc, []byte(text), dispatch.TextFrame)
 }
 
@@ -441,6 +457,11 @@ func (wc *WsConn) CloseAbnormal() error {
 // CloseDifferentMsgType 表示端点正在终止连接 ，因为它在消息中接收到与消息类型不一致的数据
 func (wc *WsConn) CloseDifferentMsgType() error {
 	return close(wc, dispatch.CloseDifferentMsgType)
+}
+
+// CloseInternalError 端点内部错误，关闭连接
+func (wc *WsConn) CloseInternalError() error {
+	return close(wc, dispatch.CloseInternalError)
 }
 
 // CloseTooBigData 表示端点正在终止连接 ，因为它收到了一条太大而无法处理的消息。
