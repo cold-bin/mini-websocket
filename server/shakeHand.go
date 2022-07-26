@@ -173,8 +173,6 @@ func (ug *upGrader) UpGrade(r *http.Request, w http.ResponseWriter) (conn *WsCon
 	//建立连接
 	wsConn := NewWsConn(netConn, true, ug.ReadBufferSize, ug.WriteBufferSize, ug.CompressLevel)
 
-	wsConn.State = Connected
-
 	//握手超时处理
 	if start.Add(ug.HandshakeTimeout).Before(time.Now()) {
 		err = wsConn.CloseAbnormal()

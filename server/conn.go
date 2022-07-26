@@ -41,7 +41,6 @@ type WsConn struct {
 	BufRD *bufio.Reader // 读，缓冲区的数据
 	BufWR *bufio.Writer // 写，缓冲区的数据
 
-	State         int  //当前连接的状态
 	IsServer      bool //标记服务端，服务端向客户端发送帧数据时，不需要掩码处理
 	CompressLevel int  //压缩等级
 }
@@ -61,7 +60,6 @@ func NewWsConn(netConn net.Conn, isServer bool, ReadBufferSize, WriteBufferSize 
 		IsServer:      isServer,
 		BufRD:         bufio.NewReaderSize(netConn, ReadBufferSize),
 		BufWR:         bufio.NewWriterSize(netConn, WriteBufferSize),
-		State:         Connecting,
 		CompressLevel: compressLevel,
 	}
 
@@ -477,7 +475,6 @@ func close(wc *WsConn, closeCode int) (err error) {
 	p = append(p, []byte(dispatch.Error(closeCode))...)
 	log.Printf("c.close sending close frame, payload=%s", p)
 
-	wc.State = Closing
 	//发送关闭帧
 	if err = sendControlFrame(wc, dispatch.ConnectionCloseFrame, p); err != nil {
 		log.Printf("c.handleClose failed to c.sendControlFrame, err=%v", err)
@@ -493,9 +490,6 @@ func close(wc *WsConn, closeCode int) (err error) {
 			}
 		}(wc)
 	}
-
-	//连接状态
-	wc.State = Closed
 
 	return nil
 }
