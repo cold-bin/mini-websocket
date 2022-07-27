@@ -1,6 +1,8 @@
 # mini-websocket
-websocket框架
-### mini-websocket's function 
+websocket framework
+### go version
+> go 1.17+
+### function 
 - [x] 序列化和反序列化帧
 - [x] 握手与挥手
 - [x] 良好的封装
@@ -9,6 +11,10 @@ websocket框架
 - [x] 跨域处理
 - [ ] 压缩
 
+### start
+```shell
+go get -u github.com/cold-bin/mini-websocket
+```
 ### 使用示例
 
 ```go
